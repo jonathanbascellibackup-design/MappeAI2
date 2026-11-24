@@ -4,35 +4,30 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Generatore Mappe Concettuali AI — Groq & JSON Matrioska</title>
-  <!-- Tailwind CSS per layout e UI responsiva -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Font Inter per massima leggibilità -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <!-- jsPDF per esportazione PDF in formato A4 orizzontale -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     body {
       font-family: 'Inter', sans-serif;
     }
-    /* Griglia puntinata leggera per l'area della mappa */
     .canvas-bg {
       background-color: #f8fafc;
       background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
       background-size: 24px 24px;
     }
-    /* Scrollbar sottile */
     ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 8px;
+      height: 8px;
     }
     ::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
+      background: #94a3b8;
       border-radius: 9999px;
     }
     ::-webkit-scrollbar-track {
-      background: transparent;
+      background: #f1f5f9;
     }
   </style>
 </head>
@@ -53,7 +48,6 @@
       </div>
     </div>
 
-    <!-- Pulsanti di esportazione e vista JSON -->
     <div class="flex flex-wrap items-center gap-2">
       <button id="btnToggleJson" type="button"
         class="px-3 py-2 text-xs sm:text-sm font-medium rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 active:scale-[0.99] transition flex items-center gap-1.5">
@@ -81,28 +75,34 @@
     </div>
   </header>
 
-  <!-- Area messaggi di stato / notifiche -->
+  <!-- Banner stato -->
   <div id="statusBanner" class="hidden mx-4 mt-2 px-4 py-2 rounded-xl text-sm font-medium flex items-center justify-between shadow-sm transition-all shrink-0 z-20">
     <span id="statusText"></span>
     <button id="closeBanner" type="button" class="ml-3 text-xs underline opacity-80 hover:opacity-100">Chiudi</button>
   </div>
 
-  <!-- Contenitore principale: Pannello sinistro (Controlli) + Area destra (Mappa allargata) -->
+  <!-- Contenitore principale -->
   <main class="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
 
     <!-- Pannello laterale sinistro -->
     <aside class="w-full lg:w-80 xl:w-96 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 z-10">
 
       <!-- Selezione modello AI -->
-      <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex flex-col gap-1.5">
-        <label for="modelSelect" class="text-xs font-semibold uppercase tracking-wider text-slate-600">Modello AI</label>
+      <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <label for="modelSelect" class="text-xs font-semibold uppercase tracking-wider text-slate-600">Modello AI</label>
+          <button id="btnRefreshModels" type="button" class="text-[11px] text-indigo-600 hover:underline font-medium">
+            Aggiorna da API
+          </button>
+        </div>
         <select id="modelSelect"
           class="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <option value="llama-3.3-70b-versatile" selected>llama-3.3-70b-versatile (Consigliato)</option>
-          <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (Ultra rapido)</option>
-          <option value="qwen-qwq-32b">qwen-qwq-32b</option>
-          <option value="gemma2-9b-it">gemma2-9b-it</option>
+          <option value="openai/gpt-oss-120b" selected>openai/gpt-oss-120b (Consigliato)</option>
+          <option value="openai/gpt-oss-20b">openai/gpt-oss-20b (Veloce)</option>
+          <option value="qwen/qwen3.8-27b">qwen/qwen3.8-27b</option>
         </select>
+        <input id="customModelInput" type="text" placeholder="Oppure scrivi un model ID esatto..."
+          class="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
       </div>
 
       <!-- Testo di partenza -->
@@ -152,11 +152,11 @@
       </div>
     </aside>
 
-    <!-- Area centrale/destra: Visualizzatore mappa allargato + pannello JSON sovrapponibile -->
-    <section class="flex-1 relative canvas-bg overflow-hidden h-full flex flex-col">
+    <!-- Area mappa allargata con pan, zoom e scorrimento -->
+    <section class="flex-1 relative canvas-bg overflow-auto h-full flex flex-col">
 
       <!-- Controlli flottanti Zoom / Pan / Reset -->
-      <div class="absolute top-3 left-3 z-10 flex items-center gap-1.5 bg-white/95 backdrop-blur border border-slate-200 p-1.5 rounded-xl shadow-sm">
+      <div class="sticky top-3 left-3 w-fit z-10 flex items-center gap-1.5 bg-white/95 backdrop-blur border border-slate-200 p-1.5 rounded-xl shadow-sm m-3">
         <button id="btnZoomIn" type="button" title="Ingrandisci"
           class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center font-bold text-slate-700">+</button>
         <button id="btnZoomOut" type="button" title="Riduci"
@@ -166,11 +166,10 @@
         <span id="zoomBadge" class="text-[11px] font-mono text-slate-500 px-1.5">100%</span>
       </div>
 
-      <!-- SVG principale a tutta area in cui viene renderizzata la mappa -->
-      <div id="mapViewport" class="w-full h-full flex-1 cursor-grab active:cursor-grabbing select-none touch-none">
-        <svg id="mindmapSvg" class="w-full h-full block" xmlns="http://www.w3.org/2000/svg">
+      <!-- Contenitore espandibile per scorrimento + trascinamento (pan) -->
+      <div id="mapViewport" class="w-full flex-1 min-h-full cursor-grab active:cursor-grabbing select-none touch-none relative">
+        <svg id="mindmapSvg" class="w-full h-full min-w-[900px] min-h-[700px] block" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <!-- Ombra morbida per i nodi -->
             <filter id="nodeShadow" x="-20%" y="-20%" width="140%" height="140%">
               <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.14" />
             </filter>
@@ -182,8 +181,8 @@
         </svg>
       </div>
 
-      <!-- Pannello a scomparsa per ispezionare e modificare il JSON a matrioska -->
-      <div id="jsonDrawer" class="hidden absolute inset-y-0 right-0 w-full sm:w-[440px] bg-slate-900 text-slate-100 shadow-2xl border-l border-slate-700 z-20 flex flex-col">
+      <!-- Pannello JSON -->
+      <div id="jsonDrawer" class="hidden fixed inset-y-0 right-0 w-full sm:w-[440px] bg-slate-900 text-slate-100 shadow-2xl border-l border-slate-700 z-30 flex flex-col">
         <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
           <div>
             <h2 class="text-sm font-semibold text-white">Struttura JSON a Matrioska</h2>
@@ -277,7 +276,7 @@ ESEMPIO DI OUTPUT VALIDO:
 
     /**
      * ============================================================================
-     * 2. MAPPA DIMOSTRATIVA PRECOMPILATA (PER TEST IMMEDIATO)
+     * 2. MAPPA DIMOSTRATIVA PRECOMPILATA
      * ============================================================================
      */
     const DEMO_MAP_JSON = {
@@ -285,79 +284,48 @@ ESEMPIO DI OUTPUT VALIDO:
         "type": "esagono_allungato_37.99.235",
         "Ingredienti Base": {
           "type": "cerchio_16.185.129",
-          "Acqua dal Suolo": {
-            "type": "quadrato_5.150.105"
-          },
-          "Anidride Carbonica": {
-            "type": "quadrato_5.150.105"
-          },
-          "Energia Solare": {
-            "type": "quadrato_5.150.105"
-          }
+          "Acqua dal Suolo": { "type": "quadrato_5.150.105" },
+          "Anidride Carbonica": { "type": "quadrato_5.150.105" },
+          "Energia Solare": { "type": "quadrato_5.150.105" }
         },
         "Strutture Cellulari": {
           "type": "cerchio_139.92.246",
           "Cloroplasti": {
             "type": "cerchio_124.58.237",
-            "Tilacoidi": {
-              "type": "quadrato_109.40.217"
-            },
-            "Stroma": {
-              "type": "quadrato_109.40.217"
-            }
+            "Tilacoidi": { "type": "quadrato_109.40.217" },
+            "Stroma": { "type": "quadrato_109.40.217" }
           },
-          "Clorofilla": {
-            "type": "quadrato_124.58.237"
-          }
+          "Clorofilla": { "type": "quadrato_124.58.237" }
         },
         "Fase Luminosa": {
           "type": "cerchio_245.158.11",
-          "Avviene nei Tilacoidi": {
-            "type": "quadrato_217.119.6"
-          },
-          "Libera Ossigeno": {
-            "type": "quadrato_217.119.6"
-          },
-          "Produce ATP e NADPH": {
-            "type": "quadrato_217.119.6"
-          }
+          "Avviene nei Tilacoidi": { "type": "quadrato_217.119.6" },
+          "Libera Ossigeno": { "type": "quadrato_217.119.6" },
+          "Produce ATP e NADPH": { "type": "quadrato_217.119.6" }
         },
         "Ciclo di Calvin": {
           "type": "cerchio_236.72.153",
-          "Fase Oscura": {
-            "type": "quadrato_219.39.119"
-          },
-          "Fissazione CO2": {
-            "type": "quadrato_219.39.119"
-          },
-          "Sintesi Glucosio": {
-            "type": "quadrato_219.39.119"
-          }
+          "Fase Oscura": { "type": "quadrato_219.39.119" },
+          "Fissazione CO2": { "type": "quadrato_219.39.119" },
+          "Sintesi Glucosio": { "type": "quadrato_219.39.119" }
         },
         "Fattori Ambientali": {
           "type": "cerchio_14.165.233",
-          "Intensità Luce": {
-            "type": "quadrato_2.132.199"
-          },
-          "Temperatura": {
-            "type": "quadrato_2.132.199"
-          },
-          "Livello CO2": {
-            "type": "quadrato_2.132.199"
-          }
+          "Intensità Luce": { "type": "quadrato_2.132.199" },
+          "Temperatura": { "type": "quadrato_2.132.199" },
+          "Livello CO2": { "type": "quadrato_2.132.199" }
         }
       }
     };
 
     /**
      * ============================================================================
-     * 3. STATO DELL'APPLICAZIONE E RIFERIMENTI DOM
+     * 3. STATO E RIFERIMENTI DOM
      * ============================================================================
      */
     let currentMapData = DEMO_MAP_JSON;
     let mapBounds = { minX: -600, minY: -450, maxX: 600, maxY: 450, width: 1200, height: 900 };
 
-    // Stato pan & zoom
     const viewState = {
       x: 0,
       y: 0,
@@ -368,6 +336,8 @@ ESEMPIO DI OUTPUT VALIDO:
     };
 
     const modelSelect = document.getElementById('modelSelect');
+    const customModelInput = document.getElementById('customModelInput');
+    const btnRefreshModels = document.getElementById('btnRefreshModels');
     const sourceText = document.getElementById('sourceText');
     const btnGenerateAi = document.getElementById('btnGenerateAi');
     const btnGenerateLabel = document.getElementById('btnGenerateLabel');
@@ -391,6 +361,11 @@ ESEMPIO DI OUTPUT VALIDO:
     const mapViewport = document.getElementById('mapViewport');
     const zoomBadge = document.getElementById('zoomBadge');
 
+    function getActiveModel() {
+      const custom = customModelInput.value.trim();
+      return custom || modelSelect.value;
+    }
+
     function showStatus(message, type = 'info') {
       statusText.textContent = message;
       statusBanner.classList.remove('hidden', 'bg-rose-100', 'text-rose-800', 'bg-emerald-100', 'text-emerald-800', 'bg-indigo-100', 'text-indigo-800');
@@ -407,7 +382,7 @@ ESEMPIO DI OUTPUT VALIDO:
 
     /**
      * ============================================================================
-     * 4. PARSING DEL JSON A MATRIOSKA E DEL CAMPO "type" ({forma}_{R}.{G}.{B})
+     * 4. PARSING DEL JSON A MATRIOSKA
      * ============================================================================
      */
     function parseNodeType(typeStr, depth) {
@@ -549,7 +524,7 @@ ESEMPIO DI OUTPUT VALIDO:
 
     /**
      * ============================================================================
-     * 5. MOTORE DI LAYOUT RADIALE SENZA SOVRAPPOSIZIONI NÉ INTRECCI
+     * 5. MOTORE DI LAYOUT RADIALE
      * ============================================================================
      */
     function layoutRadialTree(root) {
@@ -626,7 +601,7 @@ ESEMPIO DI OUTPUT VALIDO:
 
     /**
      * ============================================================================
-     * 6. RENDERING SVG DELLA MAPPA (CURVE DI BÉZIER + 3 FORME + TESTO)
+     * 6. RENDERING SVG DELLA MAPPA
      * ============================================================================
      */
     function renderMindmap(jsonData) {
@@ -763,9 +738,13 @@ ESEMPIO DI OUTPUT VALIDO:
           minY,
           maxX,
           maxY,
-          width: Math.max(400, maxX - minX),
-          height: Math.max(300, maxY - minY)
+          width: Math.max(600, maxX - minX),
+          height: Math.max(500, maxY - minY)
         };
+
+        // Dimensiona l'SVG in modo che se si fa zoom o se la mappa è ampia compaiano anche le barre di scorrimento
+        mindmapSvg.style.minWidth = Math.max(900, Math.round(mapBounds.width * 1.15)) + 'px';
+        mindmapSvg.style.minHeight = Math.max(700, Math.round(mapBounds.height * 1.15)) + 'px';
 
         currentMapData = jsonData;
         jsonEditor.value = JSON.stringify(jsonData, null, 2);
@@ -793,8 +772,8 @@ ESEMPIO DI OUTPUT VALIDO:
       const vw = rect.width || 800;
       const vh = rect.height || 600;
 
-      const scaleX = (vw * 0.92) / mapBounds.width;
-      const scaleY = (vh * 0.92) / mapBounds.height;
+      const scaleX = (vw * 0.9) / mapBounds.width;
+      const scaleY = (vh * 0.9) / mapBounds.height;
       viewState.scale = Math.min(1.2, Math.max(0.25, Math.min(scaleX, scaleY)));
 
       const centerX = (mapBounds.minX + mapBounds.maxX) / 2;
@@ -806,7 +785,7 @@ ESEMPIO DI OUTPUT VALIDO:
     }
 
     document.getElementById('btnZoomIn').addEventListener('click', () => {
-      viewState.scale = Math.min(3, viewState.scale * 1.2);
+      viewState.scale = Math.min(3.5, viewState.scale * 1.2);
       applyTransform();
     });
 
@@ -817,19 +796,22 @@ ESEMPIO DI OUTPUT VALIDO:
 
     document.getElementById('btnResetView').addEventListener('click', fitMapToScreen);
 
+    // Zoom con rotellina quando si tiene premuto Ctrl/Cmd o Shift, altrimenti scorrimento naturale
     mapViewport.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const rect = mapViewport.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
+      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+        e.preventDefault();
+        const rect = mapViewport.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
 
-      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-      const newScale = Math.min(3, Math.max(0.2, viewState.scale * factor));
+        const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+        const newScale = Math.min(3.5, Math.max(0.2, viewState.scale * factor));
 
-      viewState.x = mx - ((mx - viewState.x) / viewState.scale) * newScale;
-      viewState.y = my - ((my - viewState.y) / viewState.scale) * newScale;
-      viewState.scale = newScale;
-      applyTransform();
+        viewState.x = mx - ((mx - viewState.x) / viewState.scale) * newScale;
+        viewState.y = my - ((my - viewState.y) / viewState.scale) * newScale;
+        viewState.scale = newScale;
+        applyTransform();
+      }
     }, { passive: false });
 
     function startDrag(clientX, clientY) {
@@ -865,16 +847,54 @@ ESEMPIO DI OUTPUT VALIDO:
 
     /**
      * ============================================================================
-     * 8. CHIAMATA ALLE API DI GROQ PER GENERARE IL JSON DALLA STRINGA DI TESTO
+     * 8. MODELLI GROQ E GENERAZIONE MAPPA
      * ============================================================================
      */
+    async function refreshGroqModels() {
+      try {
+        showStatus('Recupero modelli disponibili da Groq...', 'info');
+        const res = await fetch('https://api.groq.com/openai/v1/models', {
+          headers: { 'Authorization': `Bearer ${getGroqApiKey()}` }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
+
+        const models = (data.data || [])
+          .map(m => m.id)
+          .filter(Boolean)
+          .sort();
+
+        if (models.length > 0) {
+          const prev = modelSelect.value;
+          modelSelect.innerHTML = '';
+          models.forEach(id => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = id;
+            modelSelect.appendChild(opt);
+          });
+          if (models.includes(prev)) modelSelect.value = prev;
+          showStatus(`Caricati ${models.length} modelli Groq.`, 'success');
+        }
+      } catch (err) {
+        showStatus('Impossibile aggiornare i modelli: ' + err.message, 'error');
+      }
+    }
+
+    btnRefreshModels.addEventListener('click', refreshGroqModels);
+
     async function generateMapWithGroq() {
       const apiKey = getGroqApiKey();
       const text = sourceText.value.trim();
-      const model = modelSelect.value;
+      const model = getActiveModel();
 
       if (!text) {
         showStatus('Inserisci prima un testo da trasformare in mappa concettuale.', 'error');
+        return;
+      }
+
+      if (!model) {
+        showStatus('Seleziona o inserisci un ID modello valido.', 'error');
         return;
       }
 
@@ -980,7 +1000,7 @@ ESEMPIO DI OUTPUT VALIDO:
 
     /**
      * ============================================================================
-     * 10. ESPORTAZIONE AD ALTA RISOLUZIONE IN PNG E PDF
+     * 10. ESPORTAZIONE PNG E PDF
      * ============================================================================
      */
     function exportSvgToCanvas(scaleFactor = 2.5) {
@@ -1084,7 +1104,6 @@ ESEMPIO DI OUTPUT VALIDO:
       }
     });
 
-    // Avvio iniziale con la mappa demo renderizzata
     window.addEventListener('load', () => {
       renderMindmap(DEMO_MAP_JSON);
     });
